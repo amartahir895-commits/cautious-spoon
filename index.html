@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROFESSOR AMMAR - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: { 'fade-in': 'fadeIn 0.5s ease-out forwards' },
+                    keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 min-h-screen text-white flex items-center justify-center font-sans">
+
+    <div class="bg-white/10 backdrop-blur-lg border border-white/20 p-8 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-indigo-400">Toolkit Builder</h1>
+            <p class="text-gray-300 text-sm mt-2">Create your professional toolkit page</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex mb-6 border-b border-white/20">
+            <button id="tab-login" class="flex-1 pb-2 font-bold text-white border-b-2 border-pink-500" onclick="switchTab('login')">Login</button>
+            <button id="tab-register" class="flex-1 pb-2 text-gray-400 hover:text-white" onclick="switchTab('register')">Register</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="space-y-4">
+            <input type="text" id="loginName" placeholder="Page Name (e.g. professor-ammar)" class="w-full bg-black/30 border border-white/10 rounded-lg py-3 px-4 focus:border-pink-500 outline-none transition" required>
+            <input type="password" id="loginPass" placeholder="Password" class="w-full bg-black/30 border border-white/10 rounded-lg py-3 px-4 focus:border-pink-500 outline-none transition" required>
+            <button type="submit" class="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:opacity-90 py-3 rounded-lg font-bold shadow-lg mt-2">Access Dashboard</button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="registerForm" class="space-y-4 hidden">
+            <div>
+                <label class="text-xs text-gray-300 ml-1">Page Name (Visible to Public)</label>
+                <input type="text" id="regName" placeholder="e.g. PROFESSOR AMMAR TOOLKIT" class="w-full bg-black/30 border border-white/10 rounded-lg py-3 px-4 focus:border-pink-500 outline-none transition" required>
+            </div>
+            <div>
+                <label class="text-xs text-gray-300 ml-1">Admin Password</label>
+                <input type="password" id="regPass" placeholder="Create Password" class="w-full bg-black/30 border border-white/10 rounded-lg py-3 px-4 focus:border-pink-500 outline-none transition" required>
+            </div>
+            <button type="submit" class="w-full bg-white text-indigo-900 hover:bg-gray-200 py-3 rounded-lg font-bold shadow-lg mt-2">Create Page</button>
+        </form>
+
+        <div id="msg" class="mt-4 text-center text-sm font-semibold min-h-[20px]"></div>
+    </div>
+
+    <script type="module">
+        import { db, doc, getDoc, setDoc } from './config.js';
+
+        window.switchTab = (tab) => {
+            const login = document.getElementById('loginForm');
+            const reg = document.getElementById('registerForm');
+            const tLog = document.getElementById('tab-login');
+            const tReg = document.getElementById('tab-register');
+            const msg = document.getElementById('msg');
+            msg.innerText = '';
+
+            if(tab === 'login') {
+                login.classList.remove('hidden'); reg.classList.add('hidden');
+                tLog.classList.add('text-white', 'border-pink-500'); tLog.classList.remove('text-gray-400');
+                tReg.classList.add('text-gray-400'); tReg.classList.remove('text-white', 'border-pink-500');
+            } else {
+                login.classList.add('hidden'); reg.classList.remove('hidden');
+                tReg.classList.add('text-white', 'border-pink-500'); tReg.classList.remove('text-gray-400');
+                tLog.classList.add('text-gray-400'); tLog.classList.remove('text-white', 'border-pink-500');
+            }
+        }
+
+        // Helper to clean ID
+        function sanitizeID(name) {
+            return name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-_]/g, '');
+        }
+
+        // REGISTER
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const rawName = document.getElementById('regName').value;
+            const pageID = sanitizeID(rawName); // "Professor Ammar" -> "professor-ammar"
+            const password = document.getElementById('regPass').value;
+            const msg = document.getElementById('msg');
+
+            if(!pageID) {
+                msg.innerText = "Invalid Name"; msg.className = "mt-4 text-center text-red-400"; return;
+            }
+
+            msg.innerText = 'Creating...'; msg.className = 'mt-4 text-center text-yellow-400';
+
+            try {
+                const docRef = doc(db, "pages", pageID);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    msg.innerText = 'This Page ID is taken. Try another.';
+                    msg.className = 'mt-4 text-center text-red-400';
+                } else {
+                    await setDoc(docRef, {
+                        pageName: pageID,
+                        originalName: rawName, // Save original fancy name
+                        password: password,
+                        title: rawName,
+                        description: "Welcome to my official toolkit.",
+                        avatar: "", // Empty initially
+                        links: []
+                    });
+                    sessionStorage.setItem('user', pageID);
+                    msg.innerText = 'Success! Redirecting...';
+                    msg.className = 'mt-4 text-center text-green-400';
+                    setTimeout(() => window.location.href = 'admin.html', 1500);
+                }
+            } catch (error) {
+                console.error(error);
+                msg.innerText = 'Error creating page.';
+            }
+        });
+
+        // LOGIN
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            let inputName = document.getElementById('loginName').value;
+            const pageID = sanitizeID(inputName);
+            const password = document.getElementById('loginPass').value;
+            const msg = document.getElementById('msg');
+
+            msg.innerText = 'Verifying...'; msg.className = 'mt-4 text-center text-yellow-400';
+
+            try {
+                const docRef = doc(db, "pages", pageID);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists() && docSnap.data().password === password) {
+                    sessionStorage.setItem('user', pageID);
+                    window.location.href = 'admin.html';
+                } else {
+                    msg.innerText = 'Invalid credentials';
+                    msg.className = 'mt-4 text-center text-red-400';
+                }
+            } catch (error) {
+                console.error(error);
+                msg.innerText = 'Login Error';
+            }
+        });
+    </script>
+</body>
+</html>
