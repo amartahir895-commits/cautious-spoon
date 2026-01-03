@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 font-sans">
+
+    <!-- Navbar -->
+    <nav class="bg-white px-6 py-4 shadow-sm flex justify-between items-center sticky top-0 z-50">
+        <h1 class="font-bold text-xl text-indigo-700">Admin Panel</h1>
+        <div>
+            <a id="viewBtn" href="#" target="_blank" class="text-indigo-600 hover:underline text-sm mr-4">View Public Page</a>
+            <button onclick="logout()" class="text-red-500 text-sm font-semibold">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8 max-w-4xl grid md:grid-cols-3 gap-8">
+        
+        <!-- LEFT: Profile Settings (Logo + Text) -->
+        <div class="md:col-span-1 space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <h2 class="font-bold text-lg mb-4">Profile Settings</h2>
+                
+                <!-- Logo Upload Section -->
+                <div class="flex flex-col items-center mb-6">
+                    <div class="relative group w-24 h-24 mb-2">
+                        <!-- Image Preview -->
+                        <img id="avatarPreview" src="https://via.placeholder.com/150" class="w-full h-full rounded-full object-cover border-4 border-indigo-100 shadow-md">
+                        
+                        <!-- Upload Overlay -->
+                        <label class="absolute inset-0 flex items-center justify-center bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-all">
+                            <i class="fas fa-camera text-xl"></i>
+                            <input type="file" id="avatarInput" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500">Tap to change logo</p>
+                </div>
+
+                <form id="profileForm" class="space-y-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Page Title</label>
+                        <input type="text" id="pTitle" class="w-full bg-gray-50 border rounded p-2 text-sm focus:border-indigo-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Description</label>
+                        <textarea id="pDesc" rows="3" class="w-full bg-gray-50 border rounded p-2 text-sm focus:border-indigo-500 outline-none"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded text-sm hover:bg-indigo-700">Save Profile</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- RIGHT: Links Manager -->
+        <div class="md:col-span-2 space-y-6">
+            
+            <!-- Add Link -->
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <h2 class="font-bold text-lg mb-4">Add New Tool</h2>
+                <form id="addLinkForm" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="text" id="linkName" placeholder="Tool Name (e.g. ChatGPT)" class="w-full border rounded p-2 text-sm" required>
+                        <input type="url" id="linkUrl" placeholder="URL" class="w-full border rounded p-2 text-sm" required>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="file" id="linkImg" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    </div>
+                    <button type="submit" id="addBtn" class="w-full bg-gray-800 text-white py-2 rounded hover:bg-black transition"><i class="fas fa-plus"></i> Add Tool</button>
+                </form>
+            </div>
+
+            <!-- List -->
+            <div id="linksList" class="space-y-3">
+                <p class="text-center text-gray-400 py-4">Loading tools...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db, storage, doc, getDoc, updateDoc, arrayUnion, ref, uploadBytes, getDownloadURL } from './config.js';
+
+        const user = sessionStorage.getItem('user');
+        if (!user) window.location.href = 'index.html';
+
+        const docRef = doc(db, "pages", user);
+        document.getElementById('viewBtn').href = `view.html?page=${user}`;
+
+        // Load Data
+        async function loadData() {
+            const snap = await getDoc(docRef);
+            if(snap.exists()){
+                const data = snap.data();
+                document.getElementById('pTitle').value = data.originalName || data.title;
+                document.getElementById('pDesc').value = data.description;
+                // Set Avatar
+                if(data.avatar) document.getElementById('avatarPreview').src = data.avatar;
+                renderLinks(data.links || []);
+            }
+        }
+        loadData();
+
+        // 1. Avatar Upload Logic
+        document.getElementById('avatarInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            // Show loading state on image
+            document.getElementById('avatarPreview').style.opacity = '0.5';
+
+            try {
+                const imgRef = ref(storage, `images/${user}/avatar_${Date.now()}`);
+                await uploadBytes(imgRef, file);
+                const url = await getDownloadURL(imgRef);
+
+                await updateDoc(docRef, { avatar: url });
+                document.getElementById('avatarPreview').src = url;
+                alert("Logo updated!");
+            } catch(err) {
+                console.error(err);
+                alert("Upload failed");
+            }
+            document.getElementById('avatarPreview').style.opacity = '1';
+        });
+
+        // 2. Save Text Profile
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await updateDoc(docRef, {
+                originalName: document.getElementById('pTitle').value, // Allow updating the display title
+                title: document.getElementById('pTitle').value,
+                description: document.getElementById('pDesc').value
+            });
+            alert("Profile Saved!");
+        });
+
+        // 3. Add Link Logic
+        document.getElementById('addLinkForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('addBtn');
+            btn.innerHTML = 'Processing...'; btn.disabled = true;
+
+            const name = document.getElementById('linkName').value;
+            const url = document.getElementById('linkUrl').value;
+            const file = document.getElementById('linkImg').files[0];
+            let imgUrl = "";
+
+            if(file) {
+                const fRef = ref(storage, `images/${user}/tools/${Date.now()}_${file.name}`);
+                await uploadBytes(fRef, file);
+                imgUrl = await getDownloadURL(fRef);
+            }
+
+            await updateDoc(docRef, {
+                links: arrayUnion({ name, url, image: imgUrl })
+            });
+
+            e.target.reset();
+            loadData();
+            btn.innerHTML = '<i class="fas fa-plus"></i> Add Tool'; btn.disabled = false;
+        });
+
+        // 4. Render Links
+        function renderLinks(links) {
+            const div = document.getElementById('linksList');
+            div.innerHTML = '';
+            if(links.length === 0) div.innerHTML = '<p class="text-center text-gray-400">No tools added yet.</p>';
+
+            links.forEach((l, i) => {
+                const item = document.createElement('div');
+                item.className = "bg-white p-4 rounded-lg shadow-sm border flex items-center justify-between";
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${l.image || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded object-cover bg-gray-200">
+                        <div><h4 class="font-bold">${l.name}</h4><p class="text-xs text-gray-500 truncate w-40">${l.url}</p></div>
+                    </div>
+                    <button onclick="delLink(${i})" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                `;
+                div.appendChild(item);
+            });
+        }
+
+        window.delLink = async (index) => {
+            if(!confirm("Delete tool?")) return;
+            const snap = await getDoc(docRef);
+            const links = snap.data().links;
+            const newLinks = links.filter((_, i) => i !== index);
+            await updateDoc(docRef, { links: newLinks });
+            loadData();
+        }
+
+        window.logout = () => { sessionStorage.removeItem('user'); window.location.href = 'index.html'; }
+    </script>
+</body>
+</html>
